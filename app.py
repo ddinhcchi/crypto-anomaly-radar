@@ -67,19 +67,29 @@ alerter = TelegramAlerter(
 )
 
 # --- Universe overview ----
+if not symbols:
+    st.info("Add at least one Binance spot symbol in the sidebar (e.g. `BTCUSDT`).")
+    st.stop()
+
 try:
     overview = cached_24h(tuple(symbols))
     st.subheader("24h overview")
-    st.dataframe(
-        overview.rename(
-            columns={
-                "lastPrice": "Last",
-                "priceChangePercent": "24h %",
-                "quoteVolume": "Quote Volume",
-            }
-        ).set_index("symbol"),
-        use_container_width=True,
-    )
+    if overview.empty:
+        st.warning(
+            "Binance returned no rows for the requested symbols. "
+            "Check spelling (`BTCUSDT` not `BTC/USDT`) or whether they were delisted."
+        )
+    else:
+        st.dataframe(
+            overview.rename(
+                columns={
+                    "lastPrice": "Last",
+                    "priceChangePercent": "24h %",
+                    "quoteVolume": "Quote Volume",
+                }
+            ).set_index("symbol"),
+            use_container_width=True,
+        )
 except Exception as exc:
     st.warning(f"24h ticker fetch failed: {exc}")
 
