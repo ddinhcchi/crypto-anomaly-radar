@@ -63,7 +63,21 @@ Trained on the same lookback window with two features:
 - `pct_return` (signed, raw)
 - `log1p(volume)` (handles long-tail volume distribution)
 
-Why two features and not just return? Most pure-price spikes already get caught by z-score. The wins from IsolationForest are anomalies where price barely moved but volume exploded (or vice versa) — e.g., a stealth accumulation candle. Those won't trip a z-score but will trip the forest. The chart marks these in purple so you can see what each detector contributes.
+#### Why `log1p(volume)` and not raw volume
+
+Spot volume is heavily right-skewed — a quiet minute might trade 5 BTC while a news minute trades 5,000. Feed raw volume to IsolationForest and *every* high-volume candle gets flagged as an outlier just because the distribution is fat-tailed, not because anything unusual is happening relative to recent activity. `log1p` compresses that tail so the forest is sensitive to *deviations from the typical regime* instead of absolute magnitude:
+
+| What you'd see with raw volume | What you see with `log1p(volume)` |
+|---|---|
+| Every London-open / NY-open candle flagged | Only the *unusually* loud London-open candles flagged |
+| Hard to tune `contamination` — fraction of "outliers" shifts with overall vol | `contamination` stays meaningful across market regimes |
+| Score correlates almost perfectly with volume itself | Score correlates with the *joint* (return, volume) surprise |
+
+`log1p` (i.e. `log(1 + x)`) instead of plain `log` because spot volume can legitimately be zero on some illiquid micro-cap candles, and `log(0)` is `-inf`.
+
+#### Why two features and not just return
+
+Most pure-price spikes already get caught by z-score. The wins from IsolationForest are anomalies where price barely moved but volume exploded (or vice versa) — e.g., a stealth accumulation candle. Those won't trip a z-score but will trip the forest. The chart marks these in purple so you can see what each detector contributes.
 
 ### Sample run on BTC/USDT, 1-minute, 500 candles
 

@@ -26,6 +26,10 @@ def add_isolation_forest(
     random_state: int = 42,
 ) -> pd.DataFrame:
     out = df.copy()
+    # log1p compresses the long right tail of spot volume so the forest learns
+    # "this candle is loud relative to recent activity" instead of "this candle
+    # is loud in absolute terms" — see README for the regression-to-volume
+    # failure mode that motivates this.
     features = pd.DataFrame(
         {
             "ret": out["pct_return"].fillna(0.0),
