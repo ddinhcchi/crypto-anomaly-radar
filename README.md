@@ -17,10 +17,12 @@ A z-score alone is too jumpy on volatile markets — every news headline trips i
 ## Features
 
 - **Live Binance spot data** via the public `/api/v3/klines` endpoint (no API key needed)
-- **Two detectors**:
+- **Three complementary detectors**:
   - Rolling z-score of % returns (window + threshold sliders)
   - IsolationForest on (return, log-volume) joint feature space
-- **Three highlight tiers**: z-score only, IsolationForest only, both agree
+  - ATR (Average True Range) range expansion — catches wick spikes that close near the open
+- **Agreement-weighted signal**: a candle highlighted in red when **≥2 of 3 detectors agree** — fewer false positives than any single signal
+- **Per-detector chart markers** so you can see what each contributes (orange = z, purple × = iso, teal ▲ = atr-only, red ★ = ≥2 agree)
 - **Candle chart** (Plotly) with anomaly markers + a z-score sub-panel with threshold lines
 - **24h universe overview** table
 - **Optional Telegram alerts** with per-symbol cooldown
@@ -79,6 +81,22 @@ Spot volume is heavily right-skewed — a quiet minute might trade 5 BTC while a
 
 Most pure-price spikes already get caught by z-score. The wins from IsolationForest are anomalies where price barely moved but volume exploded (or vice versa) — e.g., a stealth accumulation candle. Those won't trip a z-score but will trip the forest. The chart marks these in purple so you can see what each detector contributes.
 
+### ATR range expansion
+
+`TR = max(high - low, |high - prev_close|, |low - prev_close|)`. ATR is just `TR` rolling-meaned over `ATR_WINDOW` candles (default 14, Wilder's choice). A candle is flagged when `TR ≥ multiplier × ATR` (default 2.5×).
+
+Why add ATR when we already have z-score and IsoForest? Because **wick spikes**. A candle that opens at 100, prints a 108 high, and closes back at 100 has:
+
+- pct_return = 0 → z-score stays quiet
+- volume might be average → IsoForest stays quiet
+- but TR = 8% → ATR detector lights up
+
+These are real events in crypto — liquidations, flash dumps, fat-finger wicks. ATR is the only one of the three that catches them.
+
+### Agreement is the gold signal
+
+Each detector alone has a false-positive rate you can tune (threshold, contamination, multiplier). Agreement across detectors compounds: the joint false-positive rate roughly multiplies. The UI shows a red star when **≥ 2 of 3 detectors agree** — that's what you'd actually wake an on-call engineer for.
+
 ### Sample run on BTC/USDT, 1-minute, 500 candles
 
 > Numbers from a fresh fetch at the time this README was written.
@@ -87,9 +105,10 @@ Most pure-price spikes already get caught by z-score. The wins from IsolationFor
 |---|---:|
 | Z-score (\|z\| ≥ 3, window 60) | 4 |
 | IsolationForest (contamination 2%) | 10 |
-| Both agree | 2 |
+| ATR (multiplier 2.5×, window 14) | 6 |
+| **≥ 2 detectors agree** | **2** |
 
-The "both agree" set is what you'd actually wake someone up for.
+The agreement set is the small, high-confidence subset of any single signal.
 
 ---
 
@@ -134,6 +153,8 @@ docker run --rm -p 8501:8501 --env-file .env crypto-anomaly-radar
 | `ZSCORE_WINDOW` | 60 | Rolling baseline length |
 | `ZSCORE_THRESHOLD` | 3.0 | \|z\| cutoff |
 | `IF_CONTAMINATION` | 0.02 | IsolationForest outlier fraction |
+| `ATR_WINDOW` | 14 | Rolling window for ATR |
+| `ATR_MULTIPLIER` | 2.5 | TR ≥ multiplier × ATR → flagged |
 | `TELEGRAM_BOT_TOKEN` | — | Optional alerts |
 | `TELEGRAM_CHAT_ID` | — | Optional alerts |
 | `ALERT_COOLDOWN_SECONDS` | 300 | Per-symbol throttle |
