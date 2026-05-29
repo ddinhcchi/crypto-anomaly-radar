@@ -42,3 +42,24 @@ def test_isolation_forest_is_well_calibrated():
     out = detect_anomalies(df, if_contamination=0.02)
     # the injected 10% spike should be among the highest if_score points
     assert out.loc[200, "if_score"] >= out["if_score"].quantile(0.95)
+
+
+def test_atr_catches_wick_spike_that_zscore_misses():
+    """A wick spike: huge intraperiod range but close == open, so pct_return
+    is 0 and z-score stays calm. ATR should still flag it."""
+    df = _synthetic(n=300, spike_at=10, spike_pct=0.0)  # no return spike anywhere
+    # craft a wick on candle 200: open == close, but high spikes 8%
+    df.loc[200, "high"] = df.loc[200, "open"] * 1.08
+    df.loc[200, "low"] = df.loc[200, "open"] * 0.99
+    out = detect_anomalies(df, atr_window=14, atr_multiplier=2.5)
+    assert out.loc[200, "atr_anomaly"], "wick should be flagged by atr"
+    assert not out.loc[200, "zscore_anomaly"], "zscore should stay calm on a wick"
+
+
+def test_signal_count_and_both_flag():
+    df = _synthetic(spike_at=250, spike_pct=8.0)
+    out = detect_anomalies(df)
+    # signal_count is 0..3
+    assert out["signal_count"].between(0, 3).all()
+    # both_anomaly == True iff at least two detectors agree
+    assert (out["both_anomaly"] == (out["signal_count"] >= 2)).all()

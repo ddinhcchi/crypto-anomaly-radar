@@ -17,6 +17,8 @@ class Settings:
     zscore_window: int = int(os.getenv("ZSCORE_WINDOW", "60"))
     zscore_threshold: float = float(os.getenv("ZSCORE_THRESHOLD", "3.0"))
     if_contamination: float = float(os.getenv("IF_CONTAMINATION", "0.02"))
+    atr_window: int = int(os.getenv("ATR_WINDOW", "14"))
+    atr_multiplier: float = float(os.getenv("ATR_MULTIPLIER", "2.5"))
     telegram_bot_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
     telegram_chat_id: str = os.getenv("TELEGRAM_CHAT_ID", "")
     alert_cooldown_seconds: int = int(os.getenv("ALERT_COOLDOWN_SECONDS", "300"))
