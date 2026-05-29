@@ -34,6 +34,8 @@ with st.sidebar:
     zwin = st.slider("Z-score rolling window", 10, 200, settings.zscore_window, 5)
     zth = st.slider("Z-score threshold", 1.5, 6.0, settings.zscore_threshold, 0.1)
     contam = st.slider("IsolationForest contamination", 0.005, 0.10, settings.if_contamination, 0.005)
+    atr_win = st.slider("ATR window", 5, 60, settings.atr_window, 1)
+    atr_mult = st.slider("ATR multiplier", 1.5, 5.0, settings.atr_multiplier, 0.1)
 
     st.subheader("Alerts")
     enable_alert = st.toggle(
@@ -107,16 +109,20 @@ for symbol in symbols:
         zscore_window=zwin,
         zscore_threshold=zth,
         if_contamination=contam,
+        atr_window=atr_win,
+        atr_multiplier=atr_mult,
     )
     n_z = int(df["zscore_anomaly"].sum())
     n_if = int(df["if_anomaly"].sum())
+    n_atr = int(df["atr_anomaly"].sum())
     n_both = int(df["both_anomaly"].sum())
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Candles", len(df))
     c2.metric("Z-score hits", n_z)
     c3.metric("IsoForest hits", n_if)
-    c4.metric("Both agree", n_both)
+    c4.metric("ATR hits", n_atr)
+    c5.metric("≥2 signals agree", n_both)
 
     price_fig = go.Figure()
     price_fig.add_trace(
@@ -150,6 +156,17 @@ for symbol in symbols:
                 mode="markers",
                 marker=dict(color="purple", size=9, symbol="x"),
                 name="iso-forest only",
+            )
+        )
+    atr_only_hits = df[df["atr_anomaly"] & ~df["zscore_anomaly"] & ~df["if_anomaly"]]
+    if not atr_only_hits.empty:
+        price_fig.add_trace(
+            go.Scatter(
+                x=atr_only_hits["open_time"],
+                y=atr_only_hits["high"],
+                mode="markers",
+                marker=dict(color="teal", size=10, symbol="triangle-up"),
+                name="atr range only",
             )
         )
     both_hits = df[df["both_anomaly"]]
@@ -189,8 +206,13 @@ for symbol in symbols:
             st.success(f"Telegram alert sent for {symbol} (cooldown {settings.alert_cooldown_seconds}s).")
 
     with st.expander(f"Recent anomalies — {symbol}"):
-        recent = df[df["if_anomaly"] | df["zscore_anomaly"]].tail(15)[
-            ["open_time", "close", "pct_return", "zscore", "volume", "if_score", "both_anomaly"]
+        any_hit = df["if_anomaly"] | df["zscore_anomaly"] | df["atr_anomaly"]
+        recent = df[any_hit].tail(15)[
+            [
+                "open_time", "close", "pct_return", "zscore",
+                "volume", "if_score", "tr", "atr",
+                "signal_count", "both_anomaly",
+            ]
         ]
         st.dataframe(recent.set_index("open_time"), use_container_width=True)
 
