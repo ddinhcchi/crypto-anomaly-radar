@@ -117,7 +117,7 @@ The agreement set is the small, high-confidence subset of any single signal.
 | File | Responsibility |
 |---|---|
 | [`src/binance.py`](src/binance.py) | Public REST client: klines + 24h ticker |
-| [`src/detect.py`](src/detect.py) | Z-score + IsolationForest + the agreement flag |
+| [`src/detect.py`](src/detect.py) | Z-score + IsolationForest + ATR + agreement flag |
 | [`src/alert.py`](src/alert.py) | Telegram client with per-symbol cooldown |
 | [`src/config.py`](src/config.py) | `.env`-driven settings |
 | [`app.py`](app.py) | Streamlit UI, charts, controls, auto-refresh |
@@ -129,9 +129,32 @@ The agreement set is the small, high-confidence subset of any single signal.
 
 ```bash
 pytest tests/ -v
-# 3 passed: injected spike caught by z-score, quiet series stays quiet,
-#           IsolationForest ranks the injected spike in top 5%
+# 5 passed: z-score catches injected spike, quiet series stays quiet,
+#           IsolationForest ranks the spike top 5%, ATR catches wick
+#           spikes that z-score misses, signal_count integrity check
 ```
+
+---
+
+## Security — secret scanning
+
+The repo wires up [`gitleaks`](https://github.com/gitleaks/gitleaks) via [`pre-commit`](https://pre-commit.com) so a Telegram bot token (or any other credential) can never end up in a commit by accident. The hook runs locally on every `git commit` and blocks the commit if anything matches.
+
+```bash
+brew install gitleaks pre-commit   # macOS — Linux users: pipx install both
+pre-commit install                  # installs the .git/hooks/pre-commit shim
+pre-commit run --all-files          # scan everything already in the index
+gitleaks detect --source . --verbose # scan the full git history
+```
+
+[`.gitleaks.toml`](.gitleaks.toml) extends the default ruleset with two allowlists:
+
+- `.env.example` and `README.md` — they intentionally contain placeholder credentials
+- `api.binance.com` — public REST endpoint that requires no authentication, so the hostname appearing in code is not a secret
+
+This radar only uses Binance's *public* market-data endpoints — no signed requests, no API key needed. The only credential at risk is the optional Telegram bot token in `.env`, which is gitignored.
+
+For deployments, also enable [GitHub Push Protection](https://docs.github.com/en/code-security/secret-scanning/push-protection-for-repositories-and-organizations) as a second line of defence.
 
 ---
 
